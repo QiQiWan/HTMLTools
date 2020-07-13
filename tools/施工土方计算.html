@@ -1,0 +1,295 @@
+
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<style>
+		.deter {
+			width: 50px;
+			height: 50px;
+		}
+	</style>
+	<title>计算挖方量</title>
+</head>
+
+<body>
+	<div id="head">
+		<pre>每行有多少角点?</pre>
+		<input type="number" id="colCount" />
+		<pre>有多少行?</pre>
+		<input type="number" id="rowCount" />
+		<pre> 坡的宽高比:</pre>
+		<input type="number" id="M" />
+		<pre> 方格边长a:</pre>
+		<input type="number" id="A" />
+		<button id="start">生成</button>
+	</div>
+	<script type="text/javascript">
+		var start = document.getElementById("start");
+		var m = "";
+		var a = "";
+		var d = null;
+		start.addEventListener("click", res => {
+			//document.removeChild(document.getElementById('forms'));
+
+			var row = document.getElementById("rowCount").value;
+			var col = document.getElementById("colCount").value;
+			m = parseFloat(document.getElementById("M").value);
+			a = parseFloat(document.getElementById("A").value);
+			if (row == "" || col == "" || m == "" || a == "") return false;
+			else createtables(row, col);
+		});
+		function createtables(row, col) {
+			//搭建界面
+			var determinants = new Array(row);
+			for (var i = 0; i < row; i++) determinants[i] = new Array(col);
+			var form = document.createElement("table");
+			form.setAttribute("id", "forms");
+			document.body.appendChild(form);
+			var tr = new Array(row);
+			for (var i = 0; i < row; i++) {
+				tr[i] = document.createElement("tr");
+				form.appendChild(tr[i]);
+				for (var j = 0; j < col; j++) {
+					var td = document.createElement("td");
+					tr[i].appendChild(td);
+					determinants[i][j] = document.createElement("input");
+					determinants[i][j].setAttribute("class", "deter");
+					determinants[i][j].setAttribute("type", "number");
+					td.appendChild(determinants[i][j]);
+				}
+			}
+			d = determinants;
+
+			var count = document.createElement("button");
+			count.setAttribute("id", "count");
+			form.appendChild(count);
+
+			count.appendChild(document.createTextNode("计算"));
+			var result = document.createElement("div");
+			result.setAttribute("id", "result");
+			document.body.appendChild(result);
+			count.onclick = function () {
+				calculation(row, col, result);
+			};
+		}
+		function calculation(row, col, result) {
+			//总算法
+			//安全检查
+			d.forEach(item => {
+				if (item.value == "") return false;
+			});
+			var total = new work();
+			total.init(0, 0);
+
+			//记录四个角点位置
+			var corners = new Array(
+				d[0][0].value,
+				d[0][col - 1].value,
+				d[row - 1][0].value,
+				d[row - 1][col - 1].value
+			);
+
+			//提取四条边
+			var up = new Array(),
+				left = new Array(),
+				buttom = new Array(),
+				right = new Array();
+
+			for (var i = 0; i < row; i++) {
+				for (var j = 0; j < col; j++) {
+					if (i == 0) up.push(parseFloat(d[i][j].value));
+					if (j == 0) left.push(parseFloat(d[i][j].value));
+					if (i == row - 1) buttom.push(parseFloat(d[i][j].value));
+					if (j == col - 1) right.push(parseFloat(d[i][j].value));
+				}
+			}
+
+			var sides = new Array(up, buttom, left, right);
+
+			//提取格点
+			var latticeResult = new work().init(0, 0);
+
+			for (var i = 0; i < row - 1; i++) {
+				for (var j = 0; j < col - 1; j++) {
+					var temp = new Array(
+						d[i][j].value,
+						d[i + 1][j].value,
+						d[i][j + 1].value,
+						d[i + 1][j + 1].value
+					);
+					latticeResult.add(CalInGrid(temp));
+					console.log(latticeResult.toString("格点"));
+				}
+			}
+
+			//计算四个角点
+			corners.forEach(h => {
+				console.log(total.toString("角点"));
+				total.add(CalCorner(parseFloat(h)));
+			});
+			//计算四条边
+			sides.forEach(side => {
+				console.log(total.toString("边坡"));
+				total.add(CalSide(side));
+			});
+
+			console.log(total.toString("整个边坡"));
+			//输出结果
+			result.innerHTML =
+				latticeResult.toString("格子") +
+				"<br /> " +
+				total.toString("整个边坡");
+		}
+		//计算一条边上的土方量
+		function CalSide(side) {
+			var total = new work();
+			total.init(0, 0);
+			var len = side.length;
+			for (var i = 0; i < len - 1; i++) {
+				temp = CalLattice(side[i], side[i + 1]);
+				total.add(temp);
+			}
+			return total;
+		}
+		//计算相邻格点的挖填土方量
+		function CalLattice(p1, p2) {
+			if (p1 == 0 && p2 == 0) {
+				return new work();
+			}
+			if (checkSign(p1, p2)) {
+				//如果角点同号
+				var V;
+				if (p1 * p2 == 0) {
+					//有一个是0格点,按照三角锥计算
+					var h = checkZero(p1, p2);
+					var sign = Math.abs(h) / h; //保存符号
+					V = (a / 6) * h * h * m * sign;
+				} else {
+					//按照三棱台计算
+					var sign = Math.abs(p1) / p1; //保存符号
+					var F1 = (1 / 2) * m * p1 * p1;
+					var F2 = (1 / 2) * m * p2 * p2;
+					var F0 = (F1 + F2) / 2;
+					V = (a / 6) * (F1 + F2 + 4 * F0) * sign;
+				}
+				return new work().set(V);
+			} else {
+				//如果角点异号需要线性插值零点
+				var ap1 = (p1 * a) / (Math.abs(p1) + Math.abs(p2)); //格点1分到的边长
+				var ap2 = (p2 * a) / (Math.abs(p1) + Math.abs(p2)); //格点2分到的边长
+				// var sign1 = p1 / Math.abs(p1);
+				// var sign2 = p2 / Math.abs(p2);
+				//ap中带了正负号,这一段不要
+
+				var V1 = (ap1 / 6) * m * p1 * p1;
+				var V2 = (ap2 / 6) * m * p2 * p2;
+				var result = new work();
+				if (V1 > 0) return result.init(V2, V1);
+				else return result.init(V1, V2);
+			}
+		}
+		//按照四边形底面计算
+		function CalCorner(h) {
+			if (h == 0) return new work();
+			var V = ((Math.pow(m * h, 2) * 1) / 3) * h;
+			result = new work();
+			result.set(V);
+			return result;
+		}
+		// 计算方形格点内部的挖填量
+		// 传入一个2X2的方格
+		function CalInGrid(d) {
+			var result = new work();
+			var sum = sumAbs(d);
+			if (checkFourCorner(d)) {
+				//如果数组同号的话
+				var sign = d[0] / Math.abs(d[0]);
+				var V = (Math.pow(a, 2) / 4) * sum * sign;
+				result.set(V);
+			} else {
+				//如果数组异号的话需要分成两组求
+				var PArr = GetPositives(d);
+				var NArr = GetNegatives(d);
+				var V1 = Math.pow(a, 2) / 4 * Math.pow(sumAbs(PArr), 2) / sum;
+				var V2 = Math.pow(a, 2) / 4 * Math.pow(sumAbs(NArr), 2) / sum * -1;
+				result.init(V1, V2);
+			}
+			return result;
+		}
+		//检查四个格点是否都同号
+		function checkFourCorner(d) {
+			for (var i = 0; i < d.length - 1; i++) {
+				if (!checkSign(d[i], d[i + 1]))
+					return false;
+			}
+			return true;
+		}
+		//绝对值求和
+		function sumAbs(d) {
+			return d.length <= 1 ? Math.abs(d) : d.reduce(function (x, y) {
+				return Math.abs(x) + Math.abs(y);
+			});
+		}
+		//获取正数数列
+		function GetPositives(d) {
+			var arr = [];
+			d.forEach(item => {
+				if (item > 0) arr.push(item);
+			});
+			return arr;
+		}
+		//获取负数数列
+		function GetNegatives(d) {
+			var arr = [];
+			d.forEach(item => {
+				if (item < 0) arr.push(item);
+			});
+			return arr;
+		}
+		//检查两个数是否同号
+		function checkSign(a, b) {
+			if (a * b >= 0) return true;
+			else return false;
+		}
+		//检查哪个点为0,返回不为0的点
+		function checkZero(a, b) {
+			return a != 0 ? a : b;
+		}
+
+		//挖填对象
+		function work() {
+			this.dig = 0;
+			this.fill = 0;
+			this.init = function (a, b) {
+				a = a.toFixed(3);
+				b = b.toFixed(3);
+				//dig是正数,fill时负数
+				if (a >= 0) this.dig = a;
+				else this.fill = a;
+				if (b >= 0) this.dig = b;
+				else this.fill = b;
+				return this;
+			};
+			this.set = function (value) {
+				value = value.toFixed(3);
+				if (value > 0) this.dig = value;
+				else this.fill = value;
+				return this;
+			};
+			this.add = function (work) {
+				this.dig += work.dig;
+				this.fill += work.fill;
+			};
+			this.toString = function () {
+				return "开挖土方:" + this.dig + "<br />填充土方:" + this.fill;
+			};
+			this.toString = function (str) {
+				return str + "处开挖土方:" + this.dig + "<br />填充土方:" + this.fill;
+			};
+		}
+	</script>
+</body>
+
+</html>
